@@ -19,7 +19,7 @@ body{
   color:var(--ink);font-size:15px;line-height:1.45;
   -webkit-font-smoothing:antialiased;
 }
-#app{max-width:560px;margin:0 auto;padding:0 20px 110px}
+#app{max-width:560px;margin:0 auto;padding:0 20px calc(18px + env(safe-area-inset-bottom))}
 .num{font-variant-numeric:tabular-nums}
 h1,h2,h3{margin:0;font-weight:700;letter-spacing:-0.02em;line-height:1.2}
 h1{font-size:27px}
@@ -38,6 +38,23 @@ a{color:var(--accent)}
 .topbar .t b{display:block;font-size:17px;font-weight:700;letter-spacing:-0.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topbar .t span{display:block;font-size:12px;color:var(--muted)}
 .icon{border:0;background:transparent;color:var(--ink);font-size:20px;cursor:pointer;padding:4px 6px;line-height:1}
+.icon svg{display:block}
+.menuwrap{position:relative}
+.pop{
+  position:absolute;right:0;top:calc(100% + 8px);z-index:60;min-width:215px;display:none;
+  background:var(--bg);border:1px solid var(--line2);border-radius:13px;padding:6px;
+  box-shadow:0 14px 34px rgba(15,23,42,.14)}
+.pop.open{display:block;animation:popin .13s ease-out}
+@keyframes popin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.pop::before{content:"";position:absolute;top:-5px;right:14px;width:9px;height:9px;background:var(--bg);
+  border-left:1px solid var(--line2);border-top:1px solid var(--line2);transform:rotate(45deg)}
+.pop button{display:block;width:100%;text-align:left;background:transparent;border:0;font-family:inherit;
+  padding:9px 11px;border-radius:9px;cursor:pointer;color:var(--ink)}
+.pop button:hover,.pop button:active{background:var(--alt)}
+.pop button b{display:block;font-size:13.5px;font-weight:600;letter-spacing:-0.01em}
+.pop button span{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.pop button.out b{color:var(--b)}
+.pop .sep{height:1px;background:var(--line);margin:5px 7px}
 .icon.m{font-size:17px;color:var(--muted)}
 
 /* ---------- sections ---------- */
@@ -144,10 +161,15 @@ tr.tap{cursor:pointer}
 .banner.ko{border-left-color:var(--b);background:#FFF5F6}
 .banner.acc{border-left-color:var(--accent);background:var(--accent-soft)}
 
-/* ---------- barre d'action basse ---------- */
+/* ---------- barre d'action basse ----------
+   position:sticky et non position:fixed : la barre reste dans le flux du
+   document, donc elle ne saute plus quand la barre d'adresse de Safari se
+   rétracte au scroll, et le contenu ne défile plus derrière un fond
+   semi-transparent. Arrivé en bas de page, elle se pose à la fin du contenu. */
 .dock{
-  position:fixed;left:0;right:0;bottom:0;z-index:60;padding:12px 20px calc(12px + env(safe-area-inset-bottom));
-  background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.96) 32%);
+  position:sticky;bottom:0;z-index:60;
+  margin:22px -20px 0;padding:12px 20px calc(12px + env(safe-area-inset-bottom));
+  background:var(--bg);border-top:1px solid var(--line);
 }
 .dock .in{max-width:560px;margin:0 auto}
 .dock .btn{margin:0}
@@ -195,7 +217,7 @@ svg.chart{width:100%;height:auto;display:block;overflow:visible}
 </head>
 <body>
 <div id="app"></div>
-<div class="sheet" id="sheet"><div class="bg" onclick="UI.closeSheet()"></div><div class="box"><div class="grab"></div><div id="sheetBody"></div></div></div>
+<div class="sheet" id="sheet"><div class="bg" onclick="UI.closeSheet()"></div><div class="box" id="sheetBox"><div class="grab"></div><div id="sheetBody"></div></div></div>
 <div class="toast" id="toast"></div>
 <script type="module">
 /* ==========================================================================
@@ -216,7 +238,7 @@ const FIREBASE_CONFIG = {
 };
 
 const FB_ENABLED = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
-const APP_VERSION = "2.0";
+const APP_VERSION = "2.2";
 
 /* ==========================================================================
    2. UTILITAIRES
@@ -514,6 +536,18 @@ const topbar = (title, sub, back, right) => `<div class="topbar">
   <div class="t"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}</div>
   ${right || ""}</div>`;
 
+const GEAR_ICON = `<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="3.1"></circle>
+  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+
+const GEAR_MENU = `<div class="menuwrap">
+  <button class="icon" aria-label="Réglages" onclick="UI.toggleMenu(event)">${GEAR_ICON}</button>
+  <div class="pop" id="topMenu">
+    <button onclick="UI.closeMenu();Actions.openSettings()"><b>Paramétrage</b><span>Règles de comptage du groupe</span></button>
+    <div class="sep"></div>
+    <button class="out" onclick="UI.closeMenu();Actions.logout()"><b>Se déconnecter</b><span>Quitter le groupe sur ce téléphone</span></button>
+  </div></div>`;
+
 const section = (title, body, right) => `<div class="sec"><div class="h">${title}${right ? `<span class="r">${right}</span>` : ""}</div>${body}</div>`;
 
 const row = (label, desc, ctrl, onclick) => `<div class="row${onclick ? " tap" : ""}"${onclick ? ` onclick="${onclick}"` : ""}>
@@ -544,16 +578,41 @@ function gameStatus(g, rounds) {
    8. INTERFACE
    ========================================================================== */
 const UI = {
+  // On ne remonte en haut que si l'on change vraiment de vue. Un réglage
+  // modifié, un onglet redessiné ou une donne enregistrée laissent l'écran
+  // là où l'utilisateur l'avait laissé.
+  viewKey() { return [S.screen, S.tab, S.gameView, S.playerId, S.game && S.game.id].join("|"); },
   render() {
     const el = $("app");
+    const key = this.viewKey(), same = key === S.lastView;
+    const y = same ? (window.scrollY || window.pageYOffset || 0) : 0;
     if (S.screen === "login") el.innerHTML = this.login();
     else if (S.screen === "group") el.innerHTML = this.group();
     else if (S.screen === "game") el.innerHTML = this.gameScreen();
     else if (S.screen === "player") el.innerHTML = this.player();
-    window.scrollTo({ top: 0 });
+    else if (S.screen === "settings") el.innerHTML = this.settings();
+    S.lastView = key;
+    void el.offsetHeight;                 // force le recalcul de la hauteur
+    window.scrollTo(0, y);                // avant de restaurer la position
   },
-  openSheet(html) { $("sheetBody").innerHTML = html; $("sheet").classList.add("open"); },
-  closeSheet() { $("sheet").classList.remove("open"); S.editRound = null; S.draft = null; },
+  // Même principe dans la feuille modale : la saisie d'une donne se redessine
+  // à chaque tap, elle ne doit pas se rembobiner en haut à chaque fois.
+  openSheet(html, key) {
+    const sheet = $("sheet"), box = $("sheetBox");
+    const again = key && key === S.lastSheet && sheet.classList.contains("open");
+    const y = (again && box) ? box.scrollTop : 0;
+    $("sheetBody").innerHTML = html;
+    sheet.classList.add("open");
+    S.lastSheet = key || null;
+    if (box) box.scrollTop = y;
+  },
+  toggleMenu(e) { if (e) e.stopPropagation(); const m = $("topMenu"); if (m) m.classList.toggle("open"); },
+  closeMenu() { const m = $("topMenu"); if (m) m.classList.remove("open"); },
+  settings() {
+    return `${topbar("Paramétrage", "Règles de comptage du groupe", "Actions.backToGroup()")}
+    ${this.tabSettings()}`;
+  },
+  closeSheet() { $("sheet").classList.remove("open"); S.lastSheet = null; S.editRound = null; S.draft = null; },
 
   /* ---------- 8.1 connexion ---------- */
   login() {
@@ -586,17 +645,16 @@ const UI = {
   group() {
     const t = S.tab;
     return `
-    ${topbar(S.group.name, `${plural(S.players.length, "joueur")} · ${plural(S.games.length, "partie")}`, null,
-      `<button class="icon m" onclick="Actions.logout()">Quitter</button>`)}
+    ${topbar(S.group.name, `${plural(S.players.length, "joueur")} · ${plural(S.games.length, "partie")}`, null, GEAR_MENU)}
     <div class="seg" style="margin-top:14px">
       <button class="${t === "parties" ? "on" : ""}" onclick="UI.tab('parties')">Parties</button>
       <button class="${t === "joueurs" ? "on" : ""}" onclick="UI.tab('joueurs')">Joueurs</button>
       <button class="${t === "stats" ? "on" : ""}" onclick="UI.tab('stats')">Stats</button>
-      <button class="${t === "regles" ? "on" : ""}" onclick="UI.tab('regles')">Règles</button>
     </div>
-    ${t === "parties" ? this.tabGames() : t === "joueurs" ? this.tabPlayers() : t === "stats" ? this.tabStats() : this.tabSettings()}`;
+    ${t === "joueurs" ? this.tabPlayers() : t === "stats" ? this.tabStats() : this.tabGames()}`;
   },
   tab(t) { S.tab = t; this.render(); },
+
 
   tabGames() {
     const live = S.games.filter(g => !g.finished);
@@ -666,15 +724,17 @@ const UI = {
       <div class="stat"><b>${g.avgContract}</b><span>Contrat moyen</span></div>
       <div class="stat"><b>${g.coinches}</b><span>Coinches</span></div>
       <div class="stat"><b>${g.capots}</b><span>Capots</span></div>
+      <div class="stat"><b>${g.belotes}</b><span>Belotes-rebelotes</span></div>
       ${g.vaches ? `<div class="stat"><b>${g.vaches}</b><span>Vachés</span></div>
-      <div class="stat"><b>${g.vacheRate}%</b><span>Vachés tenus</span></div>
-      <div class="stat"><b>${g.belotes}</b><span>Belotes</span></div>` : ""}
+      <div class="stat"><b>${g.vacheRate}%</b><span>Vachés tenus</span></div>` : ""}
     </div>`)}
-    ${section("Classement", `<table><thead><tr><th>#</th><th>Joueur</th><th class="n">P</th><th class="n">V</th><th class="n">%</th><th class="n">Prises</th><th class="n">% tenu</th></tr></thead><tbody>
+    ${section("Classement", `<table><thead><tr><th>#</th><th>Joueur</th><th class="n">P</th><th class="n">V</th><th class="n">%</th><th class="n">Prises</th><th class="n">% tenu</th><th class="n">B-R</th></tr></thead><tbody>
       ${rank.map((x, i) => `<tr class="tap" onclick="Actions.openPlayer('${x.p.id}')">
         <td>${i + 1}</td><td><b>${esc(x.p.name)}</b></td><td class="n">${x.s.games}</td><td class="n">${x.s.wins}</td>
-        <td class="n">${x.s.winRate}%</td><td class="n">${x.s.takes}</td><td class="n">${x.s.takeRate}%</td></tr>`).join("")}
-      </tbody></table><p class="lead">Touche un joueur pour sa fiche détaillée.</p>`)}
+        <td class="n">${x.s.winRate}%</td><td class="n">${x.s.takes}</td><td class="n">${x.s.takeRate}%</td><td class="n">${x.s.belotes || "&ndash;"}</td></tr>`).join("")}
+      </tbody></table><p class="lead">P parties, V victoires, B-R belotes-rebelotes. Touche un joueur pour sa fiche détaillée.</p>`)}
+    ${g.beloteBars && g.beloteBars.length ? section("Belote-rebelote", `<div style="margin-top:14px">${Chart.bars(g.beloteBars, { fmt: v => plural(v, "belote") })}</div>
+      <p class="lead">Qui a le roi et la dame d'atout dans son jeu. Les donnes saisies avant la mise à jour ne sont pas attribuées à un joueur.</p>`) : ""}
     ${section("Couleurs les plus jouées", `<div style="margin-top:14px">${Chart.bars(g.suitBars)}</div>`)}
     ${section("Contrats annoncés", `<div style="margin-top:14px">${Chart.bars(g.contractBars, { fmt: v => plural(v, "donne") })}</div>`)}`;
   },
@@ -796,7 +856,7 @@ const UI = {
       <label>Objectif de points</label>
       <div class="chips">${[500, 1000, 1500, 2000, 3000].map(v => `<button class="chip dark ${d.target === v ? "on" : ""}" onclick="Actions.setGameTarget(${v})">${v}</button>`).join("")}</div>
       <button class="btn pri" onclick="Actions.createGame()">Commencer la partie</button>
-      <button class="btn ghost" onclick="UI.closeSheet()">Annuler</button>`);
+      <button class="btn ghost" onclick="UI.closeSheet()">Annuler</button>`, "newGame");
   },
 
   /* ---------- 8.6 une partie ---------- */
@@ -807,7 +867,7 @@ const UI = {
       return `<tr class="tap" onclick="Actions.editRound('${r.id}')">
         <td style="color:var(--muted)">${i + 1}</td>
         <td><b>${esc(playerName(r.takerId))}</b>${r.vache ? ` <span class="pill ink">VACHÉ</span>` : ""}</td>
-        <td>${contractLabel(r)}${r.coinche ? ` <span class="pill acc">&times;${r.coinche === 2 ? sset.surcoincheMult : sset.coincheMult}</span>` : ""}${(r.belote?.A || r.belote?.B) ? ` <span class="pill">B</span>` : ""}</td>
+        <td>${contractLabel(r)}${r.coinche ? ` <span class="pill acc">${r.coinche === 2 ? "SURCOINCH&Eacute;" : "COINCH&Eacute;"}</span>` : ""}${(r.belote?.A || r.belote?.B) ? ` <span class="pill" title="${r.beloteBy ? esc(playerName(r.beloteBy)) + " : belote-rebelote" : "belote-rebelote"}">B-R</span>` : ""}</td>
         <td><span class="pill ${c.success ? "ok" : "ko"}">${c.success ? "tenu" : "chuté"}</span></td>
         <td class="n"><b style="color:var(--a)">${r.scoreA || ""}</b></td>
         <td class="n"><b style="color:var(--b)">${r.scoreB || ""}</b></td></tr>`;
@@ -845,7 +905,7 @@ const UI = {
       <button class="btn danger" onclick="Actions.deleteGame()">Supprimer la partie</button>
       <button class="btn ghost" onclick="UI.closeSheet()">Fermer</button>
       <div class="note">Règles de cette partie : ${COUNT_LABELS[st.countMode]} · chute ${st.chuteMode === "contrat" ? "au contrat seul" : st.chuteMode === "base" ? st.chuteBase + " seuls" : st.chuteBase + " + contrat"} ·
-      belote ${st.beloteCountsForContract ? (st.beloteMinContract > 80 ? "comptée à partir de " + st.beloteMinContract : "toujours comptée") : "hors contrat"} · objectif ${st.targetScore}</div>`);
+      belote ${st.beloteCountsForContract ? (st.beloteMinContract > 80 ? "comptée à partir de " + st.beloteMinContract : "toujours comptée") : "hors contrat"} · objectif ${st.targetScore}</div>`, "gameMenu");
   },
   gameStats() {
     const s = Stats.game(S.game, S.rounds);
@@ -860,13 +920,14 @@ const UI = {
       <div class="stat"><b class="acc">${s.successRate}%</b><span>Contrats tenus</span></div>
       <div class="stat"><b>${s.avgContract}</b><span>Contrat moyen</span></div>
       <div class="stat"><b>${s.coinches}</b><span>Coinches</span></div>
-      <div class="stat"><b>${s.belotes}</b><span>Belotes</span></div>
+      <div class="stat"><b>${s.belotes}</b><span>Belotes-rebelotes</span></div>
       <div class="stat"><b>${s.capots}</b><span>Capots</span></div>
       ${mergeSettings(S.game.settings).trackVache ? `<div class="stat"><b>${s.vaches}</b><span>Vachés</span></div>
       <div class="stat"><b>${s.vacheRate}%</b><span>Vachés tenus</span></div>
       <div class="stat"><b>${s.maxContract || "&ndash;"}</b><span>Plus gros contrat</span></div>` : ""}
     </div>`)}
     ${section("Prises par joueur", `<div style="margin-top:14px">${Chart.bars(s.takerBars, { fmt: v => plural(v, "prise") })}</div>`)}
+    ${s.beloteBars && s.beloteBars.length ? section("Belote-rebelote", `<div style="margin-top:14px">${Chart.bars(s.beloteBars, { fmt: v => plural(v, "belote") })}</div>`) : ""}
     ${section("Points marqués par donne", `<div style="margin-top:14px">${Chart.line([
       { name: teamName(S.game, 0), color: "#4F46E5", values: s.rawA },
       { name: teamName(S.game, 1), color: "#E11D48", values: s.rawB }
@@ -888,7 +949,7 @@ const UI = {
       S.draft = {
         kind: "round", attack: "A", takerId: null, vache: false,
         contract: st.minContract, type: "atout", suit: "p", coinche: 0,
-        belote: { A: 0, B: 0 }, annonces: { A: 0, B: 0 }, plis: { A: 0, B: st.totalPoints }
+        beloteBy: null, belote: { A: 0, B: 0 }, annonces: { A: 0, B: 0 }, plis: { A: 0, B: st.totalPoints }
       };
     }
     const d = S.draft, att = d.attack;
@@ -918,17 +979,19 @@ const UI = {
       </div>
       <label>Coinche</label>
       <div class="seg">
-        ${[[0, "Non"], [1, "&times;" + st.coincheMult], [2, "&times;" + st.surcoincheMult]].map(([v, l]) =>
+        ${[[0, "Non"], [1, "Coinch&eacute;"], [2, "Surcoinch&eacute;"]].map(([v, l]) =>
       `<button class="${d.coinche === v ? "on" : ""}" onclick="Actions.dSet('coinche',${v})">${l}</button>`).join("")}
       </div>
       ${st.beloteEnabled ? `
-      <label>Belote</label>
-      <div style="display:flex;gap:10px">
-        <div style="flex:1"><div style="font-size:11.5px;color:var(--muted);margin-bottom:5px">${esc(teamName(g, 0))}</div>
-          <div class="chips">${[0, 1, 2].map(v => `<button class="chip wide ${(d.belote.A || 0) === v ? "on" : ""}" onclick="Actions.dBelote('A',${v})">${v || "&ndash;"}</button>`).join("")}</div></div>
-        <div style="flex:1"><div style="font-size:11.5px;color:var(--muted);margin-bottom:5px">${esc(teamName(g, 1))}</div>
-          <div class="chips">${[0, 1, 2].map(v => `<button class="chip wide ${(d.belote.B || 0) === v ? "on" : ""}" onclick="Actions.dBelote('B',${v})">${v || "&ndash;"}</button>`).join("")}</div></div>
-      </div>` : ""}
+      <label>Belote-rebelote</label>
+      <div class="takers">${all.map(p => `<button class="taker ${d.beloteBy === p.id ? "on " + p.t : ""}" onclick="Actions.pickBelote('${p.id}')">
+        <span class="av" style="width:28px;height:28px;font-size:11px;background:${d.beloteBy === p.id ? "rgba(255,255,255,.25)" : colorFor(p.id)}">${initials(playerName(p.id))}</span>
+        <em>${esc(playerName(p.id))}</em></button>`).join("")}</div>
+      <p class="lead" style="margin-top:8px">${d.beloteBy
+        ? `<b>${esc(playerName(d.beloteBy))}</b> a fait belote-rebelote : ${st.belotePoints} points pour ${esc(teamName(g, teamOf(g, d.beloteBy)))}. Touche-le &agrave; nouveau pour annuler.`
+        : (d.belote.A || d.belote.B)
+          ? `<span style="color:var(--warn)">Belote enregistr&eacute;e pour ${esc(teamName(g, d.belote.A ? 0 : 1))} avant la mise &agrave; jour.</span> Touche le joueur concern&eacute; pour la lui attribuer.`
+          : `Personne. Touche un joueur s'il a annonc&eacute; belote-rebelote.`}</p>` : ""}
       ${st.annoncesEnabled ? `
       <div style="display:flex;gap:10px">
         <div style="flex:1"><label>Annonces A</label><input type="number" inputmode="numeric" min="0" step="10" value="${d.annonces.A || 0}" oninput="Actions.dNum('annonces.A',this.value)"></div>
@@ -946,7 +1009,7 @@ const UI = {
       <div id="preview">${this.preview()}</div>
       <button class="btn pri" onclick="Actions.saveRound()">${S.editRound ? "Enregistrer" : "Valider la donne"}</button>
       ${S.editRound ? `<button class="btn danger" onclick="Actions.deleteRound()">Supprimer cette donne</button>` : ""}
-      <button class="btn ghost" onclick="UI.closeSheet()">Annuler</button>`);
+      <button class="btn ghost" onclick="UI.closeSheet()">Annuler</button>`, "round" + (S.editRound || ""));
   },
   preview() {
     const d = S.draft, g = S.game;
@@ -955,7 +1018,7 @@ const UI = {
     const isCapot = d.contract === "capot" || d.contract === "generale";
     return `<div class="banner ${c.success ? "ok" : "ko"}" style="margin-top:18px">
       <b>${c.success ? "Contrat rempli" : "Contrat chuté"}</b>${d.vache ? ` <span class="pill ink">VACHÉ</span>` : ""}
-      ${isCapot ? "" : ` &middot; ${c.attackTotal} / ${c.needed} pts`}${c.mult > 1 ? ` &middot; &times;${c.mult}` : ""}
+      ${isCapot ? "" : ` &middot; ${c.attackTotal} / ${c.needed} pts`}${d.coinche ? ` <span class="pill acc">${d.coinche === 2 ? "SURCOINCH&Eacute;" : "COINCH&Eacute;"}</span>` : ""}${!d.coinche && c.typeMult > 1 ? ` &middot; ${d.type === "sa" ? "sans-atout" : "tout-atout"} &times;${c.typeMult}` : ""}
       ${c.beloteCounts === false && (d.belote.A || d.belote.B) ? ` &middot; <span style="color:var(--warn)">belote hors contrat</span>` : ""}
       <div style="margin-top:6px;font-size:15px">
         <b style="color:var(--a)">${esc(teamName(g, 0))} ${c.scoreA}</b> &nbsp;·&nbsp;
@@ -985,7 +1048,7 @@ const UI = {
       <div class="stat"><b>${s.takeRate}%</b><span>Prises tenues</span></div>
       <div class="stat"><b>${s.avgContract}</b><span>Contrat moyen</span></div>
       <div class="stat"><b>${s.capots}</b><span>Capots</span></div>
-      <div class="stat"><b>${s.belotes}</b><span>Belotes</span></div>
+      <div class="stat"><b>${s.belotes}</b><span>Belotes-rebelotes</span></div>
       ${s.vaches ? `<div class="stat"><b>${s.vaches}</b><span>Prises vachées</span></div>
       <div class="stat"><b>${s.vacheRate}%</b><span>Vachées tenues</span></div>
       <div class="stat"><b>${s.coincheAgainst}</b><span>Coinches subies</span></div>` : ""}
@@ -1017,7 +1080,7 @@ const UI = {
       <button class="btn pri" onclick="Actions.renamePlayer()">Enregistrer</button>
       <button class="btn danger" onclick="Actions.deletePlayer()">Supprimer le joueur</button>
       <div class="note">La suppression n'efface pas les parties déjà jouées.</div>
-      <button class="btn ghost" onclick="UI.closeSheet()">Fermer</button>`);
+      <button class="btn ghost" onclick="UI.closeSheet()">Fermer</button>`, "playerMenu");
   }
 };
 
@@ -1035,7 +1098,7 @@ const Stats = {
     const n = rounds.length;
     if (!n) return { n: 0 };
     let cA = 0, cB = 0, success = 0, coinches = 0, belotes = 0, capots = 0, vaches = 0, vachesOK = 0, maxC = 0;
-    const cumA = [0], cumB = [0], rawA = [], rawB = [], contracts = [], takers = {}, suitCount = {};
+    const cumA = [0], cumB = [0], rawA = [], rawB = [], contracts = [], takers = {}, suitCount = {}, beloteBy = {};
     let best = null, streakTeam = null, streak = 0;
     rounds.forEach(r => {
       const c = computeRound(r, g.settings);
@@ -1044,6 +1107,7 @@ const Stats = {
       if (c.success) success++;
       if (r.coinche) coinches++;
       belotes += (r.belote?.A || 0) + (r.belote?.B || 0);
+      if (r.beloteBy) beloteBy[r.beloteBy] = (beloteBy[r.beloteBy] || 0) + 1;
       if (r.vache) { vaches++; if (c.success) vachesOK++; }
       if (r.contract === "capot" || r.contract === "generale") { if (c.success) capots++; }
       else { contracts.push(Number(r.contract)); maxC = Math.max(maxC, Number(r.contract)); }
@@ -1061,6 +1125,7 @@ const Stats = {
       bestRound: best,
       streak: streakTeam ? `${plural(streak, "donne")} pour ${teamName(g, streakTeam === "A" ? 0 : 1)}` : "–",
       takerBars: Object.entries(takers).sort((a, b) => b[1] - a[1]).map(([id, v]) => ({ label: esc(playerName(id)), value: v, color: colorFor(id) })),
+      beloteBars: Object.entries(beloteBy).sort((a, b) => b[1] - a[1]).map(([id, v]) => ({ label: esc(playerName(id)), value: v, color: colorFor(id) })),
       suitBars: Object.entries(suitCount).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v }))
     };
   },
@@ -1068,7 +1133,7 @@ const Stats = {
     const rounds = S.allRounds;
     if (!rounds.length) return { rounds: 0, games: S.games.length };
     let success = 0, coinches = 0, capots = 0, vaches = 0, vachesOK = 0, belotes = 0;
-    const contracts = [], suitCount = {}, bucket = {};
+    const contracts = [], suitCount = {}, bucket = {}, beloteBy = {};
     rounds.forEach(r => {
       const g = S.games.find(x => x.id === r.gameId); if (!g) return;
       const c = computeRound(r, g.settings);
@@ -1076,6 +1141,7 @@ const Stats = {
       if (r.coinche) coinches++;
       if (r.vache) { vaches++; if (c.success) vachesOK++; }
       belotes += (r.belote?.A || 0) + (r.belote?.B || 0);
+      if (r.beloteBy) beloteBy[r.beloteBy] = (beloteBy[r.beloteBy] || 0) + 1;
       if ((r.contract === "capot" || r.contract === "generale")) { if (c.success) capots++; bucket["Capot"] = (bucket["Capot"] || 0) + 1; }
       else { contracts.push(Number(r.contract)); bucket[r.contract] = (bucket[r.contract] || 0) + 1; }
       const k = typeName(r); suitCount[k] = (suitCount[k] || 0) + 1;
@@ -1084,13 +1150,14 @@ const Stats = {
       games: S.games.length, rounds: rounds.length, successRate: pct(success, rounds.length),
       avgContract: contracts.length ? Math.round(avg(contracts)) : 0,
       coinches, capots, vaches, vachesOK, vacheRate: pct(vachesOK, vaches), belotes,
+      beloteBars: Object.entries(beloteBy).sort((a, b) => b[1] - a[1]).map(([id, v]) => ({ label: esc(playerName(id)), value: v, color: colorFor(id) })),
       suitBars: Object.entries(suitCount).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v })),
       contractBars: Object.entries(bucket).sort((a, b) => (isNaN(+a[0]) ? 999 : +a[0]) - (isNaN(+b[0]) ? 999 : +b[0])).map(([k, v]) => ({ label: k, value: v }))
     };
   },
   allPlayers() {
     const out = {};
-    S.players.forEach(p => { out[p.id] = { games: 0, decided: 0, wins: 0, takes: 0, takesOK: 0, vaches: 0, winRate: 0, takeRate: 0 }; });
+    S.players.forEach(p => { out[p.id] = { games: 0, decided: 0, wins: 0, takes: 0, takesOK: 0, vaches: 0, belotes: 0, winRate: 0, takeRate: 0 }; });
     S.games.forEach(g => {
       const rounds = this.roundsOf(g.id);
       const winner = this.decided(g, rounds);
@@ -1100,6 +1167,7 @@ const Stats = {
         if (winner != null) { out[id].decided++; if (winner === ti) out[id].wins++; }
       }));
       rounds.forEach(r => {
+        if (r.beloteBy && out[r.beloteBy]) out[r.beloteBy].belotes++;
         const o = out[r.takerId]; if (!o) return;
         o.takes++;
         if (computeRound(r, g.settings).success) o.takesOK++;
@@ -1111,7 +1179,7 @@ const Stats = {
   },
   player(pid) {
     let games = 0, decided = 0, wins = 0, roundsPlayed = 0, takes = 0, takesOK = 0, capots = 0,
-      vaches = 0, vachesOK = 0, coincheAgainst = 0, belotes = 0, pointsFor = 0;
+      vaches = 0, vachesOK = 0, coincheAgainst = 0, belotes = 0, belotesTeam = 0, pointsFor = 0;
     const contracts = [], suitCount = {}, partners = {}, opps = {}, recent = [];
     S.games.forEach(g => {
       const team = teamOf(g, pid);
@@ -1147,7 +1215,8 @@ const Stats = {
           const k = typeName(r); suitCount[k] = (suitCount[k] || 0) + 1;
         }
         if (r.coinche && r.attack === myKey) coincheAgainst++;
-        belotes += (r.belote?.[myKey] || 0);
+        if (r.beloteBy === pid) belotes++;
+        belotesTeam += (r.belote?.[myKey] || 0);
       });
     });
     const partnerRows = Object.entries(partners).map(([name, v]) => ({ name, games: v.games, wins: v.wins, rate: pct(v.wins, v.decided) })).sort((a, b) => b.games - a.games);
@@ -1157,7 +1226,7 @@ const Stats = {
       games, decided, wins, winRate: pct(wins, decided), rounds: roundsPlayed, takes, takesOK,
       takeRate: pct(takesOK, takes), avgContract: contracts.length ? Math.round(avg(contracts)) : 0,
       pointsPerRound: roundsPlayed ? Math.round(pointsFor / roundsPlayed) : 0,
-      capots, vaches, vachesOK, vacheRate: pct(vachesOK, vaches), coincheAgainst, belotes,
+      capots, vaches, vachesOK, vacheRate: pct(vachesOK, vaches), coincheAgainst, belotes, belotesTeam,
       suitBars: Object.entries(suitCount).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v })),
       partnerBars: partnerRows.map(r => ({ label: `${r.name} (${r.rate}%)`, value: r.games })),
       partnerRows, oppRows,
@@ -1208,6 +1277,7 @@ const Actions = {
     S.screen = "group"; S.tab = "parties"; UI.render();
   },
   backToGroup() { S.screen = "group"; S.game = null; UI.render(); },
+  openSettings() { S.screen = "settings"; UI.render(); },
 
   /* ----- joueurs ----- */
   async addPlayer() {
@@ -1293,7 +1363,12 @@ const Actions = {
   },
   dSet(k, v) { S.draft[k] = v; UI.roundSheet(); },
   setSuit(k) { S.draft.type = "atout"; S.draft.suit = k; UI.roundSheet(); },
-  dBelote(t, v) { S.draft.belote[t] = v; UI.roundSheet(); },
+  pickBelote(id) {
+    const d = S.draft, g = S.game;
+    if (d.beloteBy === id) { d.beloteBy = null; d.belote = { A: 0, B: 0 }; }
+    else { d.beloteBy = id; d.belote = teamOf(g, id) === 0 ? { A: 1, B: 0 } : { A: 0, B: 1 }; }
+    UI.roundSheet();
+  },
   dNum(path, val) {
     const [a, b] = path.split(".");
     if (b) S.draft[a][b] = Math.max(0, Number(val) || 0); else S.draft[a] = Math.max(0, Number(val) || 0);
@@ -1314,7 +1389,7 @@ const Actions = {
       id: S.editRound || uid(), groupId: S.group.id, gameId: g.id,
       index: S.editRound ? S.rounds.find(x => x.id === S.editRound).index : S.rounds.length,
       attack: d.attack, takerId: d.takerId, vache: !!d.vache, contract: d.contract, type: d.type, suit: d.suit,
-      coinche: d.coinche, belote: d.belote, annonces: d.annonces, plis: d.plis,
+      coinche: d.coinche, beloteBy: d.beloteBy || null, belote: d.belote, annonces: d.annonces, plis: d.plis,
       scoreA: c.scoreA, scoreB: c.scoreB, success: c.success, createdAt: Date.now()
     };
     await store.saveRound(r);
@@ -1376,6 +1451,10 @@ const Actions = {
    11. DÉMARRAGE
    ========================================================================== */
 window.UI = UI; window.Actions = Actions; window.S = S; window.Stats = Stats;
+
+// fermer le menu de la roue crantée au moindre clic ailleurs, ou sur Échap
+document.addEventListener("click", () => UI.closeMenu());
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") UI.closeMenu(); });
 
 (async function boot() {
   if (FB_ENABLED) {
