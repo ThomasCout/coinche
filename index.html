@@ -238,7 +238,7 @@ const FIREBASE_CONFIG = {
 };
 
 const FB_ENABLED = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
-const APP_VERSION = "2.2";
+const APP_VERSION = "2.3";
 
 /* ==========================================================================
    2. UTILITAIRES
@@ -309,8 +309,8 @@ const mergeSettings = (s) => Object.assign({}, DEFAULT_SETTINGS, s || {});
 
 const PRESETS = [
   {
-    id: "groupe", name: "Nos règles", desc: "Chute à 160, belote ignorée sous 100, vache suivie",
-    s: { targetScore: 1000, countMode: "annonce", chuteMode: "base_plus_contrat", chuteBase: 160, beloteMinContract: 100, trackVache: true, roundTo10: false, generaleEnabled: false, coincheOnBoni: false, annoncesCountForContract: true, attackKeepsBoniOnChute: false, boniInScore: true, defenseKeepsBoni: true, beloteCountsForContract: true, beloteEnabled: true, annoncesEnabled: true, capotPoints: 250 }
+    id: "groupe", name: "Nos règles", desc: "Chute à 160, belote-rebelote à 10 et ignorée sous 100, vache suivie",
+    s: { targetScore: 1000, countMode: "annonce", chuteMode: "base_plus_contrat", chuteBase: 160, belotePoints: 10, beloteMinContract: 100, trackVache: true, roundTo10: false, generaleEnabled: false, coincheOnBoni: false, annoncesCountForContract: true, attackKeepsBoniOnChute: false, boniInScore: true, defenseKeepsBoni: true, beloteCountsForContract: true, beloteEnabled: true, annoncesEnabled: true, capotPoints: 250 }
   },
   {
     id: "classique", name: "Coinche classique", desc: "Contrat annoncé, chute à 162 + contrat, belote toujours comptée",
@@ -347,7 +347,10 @@ function computeRound(r, st) {
   const r10 = (v) => st.roundTo10 ? Math.round(v / 10) * 10 : v;
 
   const plis = { A: Number(r.plis?.A || 0), B: Number(r.plis?.B || 0) };
-  const bel = { A: Number(r.belote?.A || 0) * st.belotePoints, B: Number(r.belote?.B || 0) * st.belotePoints };
+  // La belote-rebelote est un bonus unique : présente ou absente. On ne
+  // multiplie jamais par un nombre d'annonces, même si une donne enregistrée
+  // avec une ancienne version porte la valeur 2.
+  const bel = { A: r.belote?.A ? st.belotePoints : 0, B: r.belote?.B ? st.belotePoints : 0 };
   const ann = { A: Number(r.annonces?.A || 0), B: Number(r.annonces?.B || 0) };
   if (!st.beloteEnabled) { bel.A = bel.B = 0; }
   if (!st.annoncesEnabled) { ann.A = ann.B = 0; }
@@ -376,7 +379,9 @@ function computeRound(r, st) {
     else if (st.countMode === "realise") core = r10(plis[att]);
     else core = contractValue + r10(plis[att]);
     sc[att] = core * mult;
-    if (st.boniInScore) sc[att] += boni[att] * (st.coincheOnBoni ? mult : typeMult);
+    // Les boni ne suivent les multiplicateurs que si le réglage l'autorise :
+    // ni la coinche ni le sans-atout ne doublent la belote par défaut.
+    if (st.boniInScore) sc[att] += boni[att] * (st.coincheOnBoni ? mult : 1);
     if (st.boniInScore && st.defenseKeepsBoni) sc[def] += boni[def];
   } else {
     let core;
@@ -384,7 +389,7 @@ function computeRound(r, st) {
     else if (st.chuteMode === "base") core = st.chuteBase;
     else core = st.chuteBase + contractValue;
     sc[def] = core * mult;
-    if (st.boniInScore) sc[def] += boni[def] * (st.coincheOnBoni ? mult : typeMult);
+    if (st.boniInScore) sc[def] += boni[def] * (st.coincheOnBoni ? mult : 1);
     if (st.boniInScore && st.attackKeepsBoniOnChute) sc[att] += boni[att];
   }
   return {
@@ -807,12 +812,12 @@ const UI = {
       ${row("Surcoinche", "Réponse de l'équipe preneuse", step("surcoincheMult", "&times;" + st.surcoincheMult))}
       ${row("Sans-atout", "Aucune couleur d'atout", step("multSansAtout", "&times;" + st.multSansAtout))}
       ${row("Tout-atout", "Les quatre couleurs sont atout", step("multToutAtout", "&times;" + st.multToutAtout))}
-      ${row("La coinche double les boni", "Belote et annonces multipliées elles aussi", sw("coincheOnBoni", st.coincheOnBoni))}
+      ${row("Les multiplicateurs s'appliquent aux boni", "Si activé, la belote et les annonces sont multipliées comme le contrat (coinche, sans-atout, tout-atout). Désactivé, elles gardent leur valeur nominale.", sw("coincheOnBoni", st.coincheOnBoni))}
     `)}
     ${section("Belote et annonces", `
-      ${row("Belote-rebelote", "Roi + Dame d'atout", sw("beloteEnabled", st.beloteEnabled))}
+      ${row("Belote-rebelote", "Roi + Dame d'atout dans la même main", sw("beloteEnabled", st.beloteEnabled))}
       ${st.beloteEnabled ? `
-        ${row("Valeur de la belote", "", step("belotePoints", st.belotePoints))}
+        ${row("Valeur de la belote-rebelote", "Un seul bonus par donne : ces points sont accordés une fois, jamais doublés par la coinche ni par le sans-atout (sauf si le réglage ci-dessous le demande)", step("belotePoints", st.belotePoints))}
         ${row("La belote compte pour le contrat", "Elle aide à atteindre les points annoncés", sw("beloteCountsForContract", st.beloteCountsForContract))}
         ${st.beloteCountsForContract ? row("À partir d'un contrat de",
         st.beloteMinContract <= 80 ? "La belote compte sur tous les contrats"
